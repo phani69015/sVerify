@@ -1,0 +1,27 @@
+{
+  "name": "sverify",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "infra:up": "podman-compose -f infra/podman-compose.yml up -d",
+    "infra:down": "podman-compose -f infra/podman-compose.yml down",
+    "infra:logs": "podman-compose -f infra/podman-compose.yml logs -f",
+    "build": "pnpm -r build",
+    "dev:api": "pnpm --filter @sverify/api dev",
+    "dev:web": "pnpm --filter @sverify/web dev",
+    "dev:extraction-sidecar": "pnpm --filter @sverify/extraction-sidecar dev",
+    "dev:worker:orchestration": "pnpm --filter @sverify/orchestration-worker dev",
+    "dev:worker:extraction": "pnpm --filter @sverify/extraction-worker dev",
+    "dev:worker:ml": "pnpm --filter @sverify/ml-worker dev",
+    "dev:worker:llm": "pnpm --filter @sverify/llm-worker dev",
+    "dev:worker:io": "pnpm --filter @sverify/io-worker dev"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.2",
+    "@types/node": "^22.7.5"
+  }
+}

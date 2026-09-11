@@ -1,0 +1,25 @@
+{
+  "name": "@sverify/ml-worker",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/worker.ts",
+  "scripts": {
+    "dev": "tsx watch src/worker.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/worker.js"
+  },
+  "dependencies": {
+    "@sverify/schemas": "workspace:*",
+    "@sverify/temporal-workflows": "workspace:*",
+    "@sverify/clients": "workspace:*",
+    "@sverify/mocks": "workspace:*",
+    "@temporalio/worker": "^1.11.6",
+    "@temporalio/activity": "^1.11.6",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.2",
+    "@types/node": "^22.7.5"
+  }
+}

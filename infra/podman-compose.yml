@@ -1,0 +1,147 @@
+version: "3.9"
+
+# sVerify local infrastructure.
+# API and Temporal workers are run on the host (pnpm dev:*) for now, NOT containerized.
+# This compose file only brings up shared backing services.
+#
+# Usage:
+#   podman-compose -f infra/podman-compose.yml up -d
+#   podman-compose -f infra/podman-compose.yml down
+
+networks:
+  sverify-net:
+    driver: bridge
+
+volumes:
+  temporal-postgres-data:
+  app-postgres-data:
+  qdrant-data:
+  minio-data:
+  redis-data:
+
+services:
+  # ---------------------------------------------------------------------
+  # Temporal's own backing database (separate from app DB)
+  # ---------------------------------------------------------------------
+  temporal-postgres:
+    image: postgres:16-alpine
+    container_name: sverify-temporal-postgres
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    volumes:
+      - temporal-postgres-data:/var/lib/postgresql/data
+    networks: [sverify-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------
+  # Temporal server (auto-setup runs schema migrations on boot)
+  # ---------------------------------------------------------------------
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    container_name: sverify-temporal
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-postgres
+    ports:
+      - "7233:7233" # gRPC frontend - client/worker connect here
+    networks: [sverify-net]
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    container_name: sverify-temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8088:8080" # UI: http://localhost:8088
+    networks: [sverify-net]
+
+  # ---------------------------------------------------------------------
+  # Application database (analysis records, results, claims, evidence)
+  # ---------------------------------------------------------------------
+  app-postgres:
+    image: postgres:16-alpine
+    container_name: sverify-app-postgres
+    environment:
+      POSTGRES_USER: sverify
+      POSTGRES_PASSWORD: sverify
+      POSTGRES_DB: sverify
+    ports:
+      - "5432:5432"
+    volumes:
+      - app-postgres-data:/var/lib/postgresql/data
+    networks: [sverify-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sverify"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------
+  # Vector DB for BGE-M3 evidence embeddings
+  # ---------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:v1.11.5
+    container_name: sverify-qdrant
+    ports:
+      - "6333:6333" # REST
+      - "6334:6334" # gRPC
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks: [sverify-net]
+
+  # ---------------------------------------------------------------------
+  # Redis - caches completed verification results by post URL, so
+  # re-submitting the same URL returns instantly instead of re-running the
+  # whole extraction/ML/LLM pipeline. See apps/api/src/routes/verify.ts.
+  # ---------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: sverify-redis
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks: [sverify-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------
+  # S3-compatible object storage for downloaded media (dev stand-in for AWS S3)
+  # ---------------------------------------------------------------------
+  minio:
+    image: quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z
+    container_name: sverify-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: sverify
+      MINIO_ROOT_PASSWORD: sverify123
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console: http://localhost:9001
+    volumes:
+      - minio-data:/data
+    networks: [sverify-net]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

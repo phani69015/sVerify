@@ -1,0 +1,5 @@
+packages:
+  - "apps/*"
+  - "engine/workflows"
+  - "engine/workers/*"
+  - "packages/*"
